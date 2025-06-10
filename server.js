@@ -1,3 +1,4 @@
+require('dotenv').config();
 
 const express = require('express');
 const http = require('http');
@@ -53,9 +54,8 @@ io.on('connection', socket => {
   });
 });
 
-const TWILIO_ACCOUNT_SID = process.env;
-const TWILIO_AUTH_TOKEN = process.env;
-
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 
 app.get('/ice-credentials', async (req, res) => {
   try {
