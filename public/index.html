@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WebRTC Call</title>
+  <style>
+    video { width: 45%; margin: 10px; border: 1px solid black; }
+  </style>
+</head>
+<body>
+  <h2>Simple WebRTC Video Call</h2>
+  <video id="localVideo" autoplay  playsinline></video>
+  <video id="remoteVideo" autoplay playsinline></video>
+
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
