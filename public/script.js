@@ -1,4 +1,4 @@
-onst socket = io('https://socket-backend-lta.onrender.com');
+const socket = io('https://socket-backend-lta.onrender.com');
 const urlParams = new URLSearchParams(window.location.search);
 const callId = urlParams.get('callId');
 
