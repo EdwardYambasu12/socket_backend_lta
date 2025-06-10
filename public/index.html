@@ -2,16 +2,56 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>WebRTC Call</title>
+  <title>Alert Liberia Video Call</title>
   <style>
-    video { width: 45%; margin: 10px; border: 1px solid black; }
+    body {
+      background: #181c20;
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    #videoContainer {
+      position: relative;
+      width: 70vw;
+      height: 70vh;
+      background: #23272b;
+      border-radius: 18px;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #remoteVideo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 18px;
+      background: #111;
+    }
+    #localVideo {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      width: 180px;
+      height: 120px;
+      object-fit: cover;
+      border: 3px solid #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+      background: #222;
+      transform: scaleX(-1); /* Mirror the local video */
+    }
   </style>
 </head>
 <body>
-  <h2>Simple WebRTC Video Call</h2>
-  <video id="localVideo" autoplay  playsinline></video>
-  <video id="remoteVideo" autoplay playsinline></video>
-
+  <div id="videoContainer">
+    <video id="remoteVideo" autoplay playsinline></video>
+    <video id="localVideo" autoplay playsinline muted></video>
+  </div>
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
   <script src="script.js"></script>
