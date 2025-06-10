@@ -29,20 +29,24 @@ navigator.mediaDevices.getUserMedia({ video: true, audio: true })
 function startCall(targetUserId) {
   console.log('Starting call to:', targetUserId);
   peer = new SimplePeer({
-    initiator: true,
-    trickle: false,
-    stream: localStream,
-    config: {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        {
-          urls: 'turn:openrelay.metered.ca:80',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        }
-      ]
-    }
-  });
+  initiator: false,
+  trickle: false,
+  stream: localStream,
+  config: {
+    iceServers: [
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+      {
+        urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      }
+    ]
+  }
+});
+
 
   setupPeerListeners(targetUserId);
 }
