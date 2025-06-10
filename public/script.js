@@ -36,6 +36,7 @@ navigator.mediaDevices.getUserMedia({ video: true, audio: true })
 async function getIceServers() {
   try {
     const response = await fetch('https://socket-backend-lta.onrender.com/ice-credentials');
+console.log(await response.json())
     return await response.json();
   } catch (error) {
     console.error('Failed to fetch ICE servers, using fallback STUN only.');

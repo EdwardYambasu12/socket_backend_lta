@@ -4,7 +4,7 @@ const http = require('http');
 const cors = require('cors');
 const socketIO = require('socket.io');
 const twilio = require('twilio');
-
+const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = socketIO(server, {
@@ -16,6 +16,8 @@ const io = socketIO(server, {
 app.use(cors());
 
 const users = {};
+
+app.use(express.static(path.join(__dirname, 'public')));
 
 io.on('connection', socket => {
   console.log('New client connected');
