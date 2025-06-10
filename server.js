@@ -1,72 +1,86 @@
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
-const socketIo = require('socket.io');
 const cors = require('cors');
+const socketIO = require('socket.io');
 const twilio = require('twilio');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server, {
-  cors: { origin: "*" }
+const io = socketIO(server, {
+  cors: { origin: '*' }
 });
 
-const userSocketMap = {};
+app.use(cors());
+app.use(express.static(path.join(__dirname, 'public')));
+
+const users = {};
+
+// Twilio credentials log for debug (mask in prod)
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+
+if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
+  console.error('❌ TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN not set in .env file');
+} else {
+  console.log('✅ Twilio credentials loaded');
+}
+
+io.on('connection', socket => {
+  console.log(`🔗 New client connected: ${socket.id}`);
+
+  socket.on('register', userId => {
+    users[userId] = socket.id;
+    console.log(`✅ User registered: ${userId} -> ${socket.id}`);
+  });
+// Pseudo code in your socket backend
 const pendingCalls = {};
 
-const twilioClient = twilio('YOUR_TWILIO_SID', 'YOUR_TWILIO_AUTH_TOKEN');
-
-app.use(cors());
-
-app.get('/ice-credentials', async (req, res) => {
-  try {
-    const ice = await twilioClient.tokens.create();
-    res.json(ice.iceServers);
-  } catch (err) {
-    res.status(500).json({ error: 'Could not fetch ICE servers' });
+socket.on('call-user', ({ toUserId, fromUserId, signalData }) => {
+  const targetSocket = userSocketMap[toUserId];
+  if (targetSocket) {
+    targetSocket.emit('incoming-call', { signalData, fromUserId });
+  } else {
+    // Store pending call
+    pendingCalls[toUserId] = { fromUserId, signalData };
   }
 });
 
-io.on('connection', socket => {
-  console.log('🔗 New client connected:', socket.id);
+socket.on('register', (userId) => {
+  userSocketMap[userId] = socket;
+  if (pendingCalls[userId]) {
+    const { fromUserId, signalData } = pendingCalls[userId];
+    socket.emit('incoming-call', { fromUserId, signalData });
+    delete pendingCalls[userId];
+  }
+});
 
-  socket.on('register', userId => {
-    userSocketMap[userId] = socket;
-    console.log(`✅ User registered: ${userId} -> ${socket.id}`);
-
-    // Deliver pending call if exists
-    if (pendingCalls[userId]) {
-      console.log(`📤 Delivering pending call to ${userId}`);
-      socket.emit('incoming-call', pendingCalls[userId]);
-      delete pendingCalls[userId];
+  socket.on('disconnect', () => {
+    for (const userId in users) {
+      if (users[userId] === socket.id) {
+        console.log(`❌ User disconnected: ${userId}`);
+        delete users[userId];
+        break;
+      }
     }
-
-    socket.on('call-user', ({ toUserId, fromUserId, signalData }) => {
-      const targetSocket = userSocketMap[toUserId];
-      if (targetSocket) {
-        console.log(`📞 Calling user: ${toUserId} from ${fromUserId}`);
-        targetSocket.emit('incoming-call', { signalData, fromUserId });
-      } else {
-        console.log(`🕓 Storing pending call to ${toUserId}`);
-        pendingCalls[toUserId] = { signalData, fromUserId };
-      }
-    });
-
-    socket.on('answer-call', ({ toUserId, fromUserId, signalData }) => {
-      const targetSocket = userSocketMap[toUserId];
-      if (targetSocket) {
-        console.log(`✅ Answering call for user: ${toUserId}`);
-        targetSocket.emit('call-answered', { signalData });
-      }
-    });
-
-    socket.on('disconnect', () => {
-      console.log(`❌ User disconnected: ${userId}`);
-      delete userSocketMap[userId];
-    });
   });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+// ICE credentials route
+app.get('/ice-credentials', async (req, res) => {
+  console.log('🌐 /ice-credentials request received');
+  try {
+    const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+    const token = await client.tokens.create();
+    console.log('✅ ICE servers fetched from Twilio');
+    res.json(token.iceServers);
+  } catch (err) {
+    console.error('❌ Twilio ICE error:', err.message);
+    res.status(500).json({ error: 'Failed to get ICE servers', details: err.message });
+  }
 });
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`🚀 Server listening on port ${PORT}`));
