@@ -7,51 +7,58 @@ let peer;
 const localVideo = document.getElementById('localVideo');
 const remoteVideo = document.getElementById('remoteVideo');
 
-const currentUserId = generateRandomId();
+// Generate or retrieve persistent user ID
+function getStoredUserId() {
+  let storedId = localStorage.getItem('userId');
+  if (!storedId) {
+    storedId = 'user-' + Math.random().toString(36).substring(2, 10);
+    localStorage.setItem('userId', storedId);
+  }
+  return storedId;
+}
+
+const currentUserId = getStoredUserId();
 socket.emit('register', currentUserId);
 console.log('Registered as:', currentUserId);
 
-// Get media and either call or wait for call
+// Request access to media devices
 navigator.mediaDevices.getUserMedia({ video: true, audio: true })
   .then(stream => {
     localStream = stream;
     localVideo.srcObject = stream;
 
     if (callId && callId !== currentUserId) {
-      startCall(callId); // initiator
+      startCall(callId);
     }
   })
   .catch(err => {
     console.error('Media access error:', err);
   });
 
-// Start a call (initiator: true)
 function startCall(targetUserId) {
-  console.log('Starting call to:', targetUserId);
+  console.log('Calling user:', targetUserId);
   peer = new SimplePeer({
-  initiator: false,
-  trickle: false,
-  stream: localStream,
-  config: {
-    iceServers: [
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun3.l.google.com:19302' },
-      { urls: 'stun:stun4.l.google.com:19302' },
-      {
-        urls: 'turn:openrelay.metered.ca:80',
-        username: 'openrelayproject',
-        credential: 'openrelayproject'
-      }
-    ]
-  }
-});
-
+    initiator: true,
+    trickle: false,
+    stream: localStream,
+    config: {
+      iceServers: [
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
+      ]
+    }
+  });
 
   setupPeerListeners(targetUserId);
 }
 
-// Handle incoming call (initiator: false)
 socket.on('incoming-call', ({ signalData, fromUserId }) => {
   console.log('Incoming call from:', fromUserId);
   peer = new SimplePeer({
@@ -60,7 +67,10 @@ socket.on('incoming-call', ({ signalData, fromUserId }) => {
     stream: localStream,
     config: {
       iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
         {
           urls: 'turn:openrelay.metered.ca:80',
           username: 'openrelayproject',
@@ -74,35 +84,23 @@ socket.on('incoming-call', ({ signalData, fromUserId }) => {
   peer.signal(signalData);
 });
 
-// Handle answered call
 socket.on('call-answered', ({ signalData }) => {
-  console.log('Call answered, signaling back...');
-  if (peer) {
-    peer.signal(signalData);
-  }
+  console.log('Call answered');
+  peer?.signal(signalData);
 });
 
-// Ringing feedback
 socket.on('call-ringing', ({ toUserId }) => {
   console.log(`Ringing ${toUserId}...`);
 });
 
-// Setup all peer listeners
 function setupPeerListeners(targetUserId) {
   peer.on('signal', data => {
-    console.log('Sending signal to:', targetUserId);
-    if (peer.initiator) {
-      socket.emit('call-user', {
-        toUserId: targetUserId,
-        fromUserId: currentUserId,
-        signalData: data
-      });
-    } else {
-      socket.emit('answer-call', {
-        toUserId: targetUserId,
-        signalData: data
-      });
-    }
+    const event = peer.initiator ? 'call-user' : 'answer-call';
+    socket.emit(event, {
+      toUserId: targetUserId,
+      fromUserId: currentUserId,
+      signalData: data
+    });
   });
 
   peer.on('stream', stream => {
@@ -111,19 +109,14 @@ function setupPeerListeners(targetUserId) {
   });
 
   peer.on('connect', () => {
-    console.log('Peer connected successfully!');
+    console.log('Peer connection established!');
   });
 
   peer.on('error', err => {
-    console.error(`Peer error (${peer.initiator ? 'initiator' : 'receiver'}):`, err);
+    console.error('Peer error:', err);
   });
 
   peer.on('close', () => {
-    console.log('Peer connection closed.');
+    console.log('Peer connection closed');
   });
-}
-
-// Utility to create a temporary ID
-function generateRandomId() {
-  return 'user-' + Math.random().toString(36).substring(2, 10);
 }
