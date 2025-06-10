@@ -17,90 +17,109 @@ navigator.mediaDevices.getUserMedia({ video: true, audio: true })
     localStream = stream;
     localVideo.srcObject = stream;
 
-    // Only initiate call if callId is valid and not the same as current user
     if (callId && callId !== currentUserId) {
-      startCall(callId);
+      startCall(callId); // initiator
     }
   })
   .catch(err => {
     console.error('Media access error:', err);
   });
 
-// Start a call
+// Start a call (initiator: true)
 function startCall(targetUserId) {
-  peer = createPeer(true); // initiator
-
-  peer.on('signal', data => {
-    console.log('Sending signal to:', targetUserId);
-    socket.emit('call-user', {
-      toUserId: targetUserId,
-      fromUserId: currentUserId,
-      signalData: data
-    });
-  });
-
-  peer.on('stream', stream => {
-    remoteVideo.srcObject = stream;
-  });
-
-  peer.on('error', err => {
-    console.error('Peer error (initiator):', err);
-  });
-}
-
-// Handle incoming call
-socket.on('incoming-call', ({ signalData, fromUserId }) => {
-  peer = createPeer(false); // not initiator
-
-  peer.on('signal', data => {
-    console.log('Answering call to:', fromUserId);
-    socket.emit('answer-call', {
-      toUserId: fromUserId,
-      signalData: data
-    });
-  });
-
-  peer.on('stream', stream => {
-    remoteVideo.srcObject = stream;
-  });
-
-  peer.on('error', err => {
-    console.error('Peer error (receiver):', err);
-  });
-
-  // Delay to ensure peer is ready
-  setTimeout(() => {
-    peer.signal(signalData);
-  }, 100);
-});
-
-// Handle answered call
-socket.on('call-answered', ({ signalData }) => {
-  console.log('Call answered. Signal received.');
-  peer.signal(signalData);
-});
-
-// Optional: feedback when ringing
-socket.on('call-ringing', ({ toUserId }) => {
-  console.log(`Ringing ${toUserId}...`);
-});
-
-// Utility to create a configured peer
-function createPeer(isInitiator) {
-  return new SimplePeer({
-    initiator: isInitiator,
+  console.log('Starting call to:', targetUserId);
+  peer = new SimplePeer({
+    initiator: true,
     trickle: false,
     stream: localStream,
     config: {
       iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' }
-        // Optional TURN server can be added here
+        { urls: 'stun:stun.l.google.com:19302' },
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
       ]
     }
   });
+
+  setupPeerListeners(targetUserId);
 }
 
-// Utility to create a temporary user ID
+// Handle incoming call (initiator: false)
+socket.on('incoming-call', ({ signalData, fromUserId }) => {
+  console.log('Incoming call from:', fromUserId);
+  peer = new SimplePeer({
+    initiator: false,
+    trickle: false,
+    stream: localStream,
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
+      ]
+    }
+  });
+
+  setupPeerListeners(fromUserId);
+  peer.signal(signalData);
+});
+
+// Handle answered call
+socket.on('call-answered', ({ signalData }) => {
+  console.log('Call answered, signaling back...');
+  if (peer) {
+    peer.signal(signalData);
+  }
+});
+
+// Ringing feedback
+socket.on('call-ringing', ({ toUserId }) => {
+  console.log(`Ringing ${toUserId}...`);
+});
+
+// Setup all peer listeners
+function setupPeerListeners(targetUserId) {
+  peer.on('signal', data => {
+    console.log('Sending signal to:', targetUserId);
+    if (peer.initiator) {
+      socket.emit('call-user', {
+        toUserId: targetUserId,
+        fromUserId: currentUserId,
+        signalData: data
+      });
+    } else {
+      socket.emit('answer-call', {
+        toUserId: targetUserId,
+        signalData: data
+      });
+    }
+  });
+
+  peer.on('stream', stream => {
+    console.log('Remote stream received');
+    remoteVideo.srcObject = stream;
+  });
+
+  peer.on('connect', () => {
+    console.log('Peer connected successfully!');
+  });
+
+  peer.on('error', err => {
+    console.error(`Peer error (${peer.initiator ? 'initiator' : 'receiver'}):`, err);
+  });
+
+  peer.on('close', () => {
+    console.log('Peer connection closed.');
+  });
+}
+
+// Utility to create a temporary ID
 function generateRandomId() {
   return 'user-' + Math.random().toString(36).substring(2, 10);
 }
