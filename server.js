@@ -53,8 +53,8 @@ io.on('connection', socket => {
   });
 });
 
-const TWILIO_ACCOUNT_SID = 'YAC6111af4e33752ab07f50db6d1bf0865a';
-const TWILIO_AUTH_TOKEN = '1e3277492db8801ff0571518cc1c6bfb';
+const TWILIO_ACCOUNT_SID = process.env;
+const TWILIO_AUTH_TOKEN = process.env;
 
 
 app.get('/ice-credentials', async (req, res) => {
