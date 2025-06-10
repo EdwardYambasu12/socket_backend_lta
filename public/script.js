@@ -7,8 +7,6 @@ let peer;
 const localVideo = document.getElementById('localVideo');
 const remoteVideo = document.getElementById('remoteVideo');
 
-
-
 const currentUserId = generateRandomId();
 socket.emit('register', currentUserId);
 console.log('Registered as:', currentUserId);
@@ -19,6 +17,7 @@ navigator.mediaDevices.getUserMedia({ video: true, audio: true })
     localStream = stream;
     localVideo.srcObject = stream;
 
+    // Only initiate call if callId is valid and not the same as current user
     if (callId && callId !== currentUserId) {
       startCall(callId);
     }
@@ -29,13 +28,10 @@ navigator.mediaDevices.getUserMedia({ video: true, audio: true })
 
 // Start a call
 function startCall(targetUserId) {
-  peer = new SimplePeer({
-    initiator: true,
-    trickle: false,
-    stream: localStream
-  });
+  peer = createPeer(true); // initiator
 
   peer.on('signal', data => {
+    console.log('Sending signal to:', targetUserId);
     socket.emit('call-user', {
       toUserId: targetUserId,
       fromUserId: currentUserId,
@@ -46,17 +42,18 @@ function startCall(targetUserId) {
   peer.on('stream', stream => {
     remoteVideo.srcObject = stream;
   });
+
+  peer.on('error', err => {
+    console.error('Peer error (initiator):', err);
+  });
 }
 
 // Handle incoming call
 socket.on('incoming-call', ({ signalData, fromUserId }) => {
-  peer = new SimplePeer({
-    initiator: false,
-    trickle: false,
-    stream: localStream
-  });
+  peer = createPeer(false); // not initiator
 
   peer.on('signal', data => {
+    console.log('Answering call to:', fromUserId);
     socket.emit('answer-call', {
       toUserId: fromUserId,
       signalData: data
@@ -67,11 +64,19 @@ socket.on('incoming-call', ({ signalData, fromUserId }) => {
     remoteVideo.srcObject = stream;
   });
 
-  peer.signal(signalData);
+  peer.on('error', err => {
+    console.error('Peer error (receiver):', err);
+  });
+
+  // Delay to ensure peer is ready
+  setTimeout(() => {
+    peer.signal(signalData);
+  }, 100);
 });
 
 // Handle answered call
 socket.on('call-answered', ({ signalData }) => {
+  console.log('Call answered. Signal received.');
   peer.signal(signalData);
 });
 
@@ -80,7 +85,22 @@ socket.on('call-ringing', ({ toUserId }) => {
   console.log(`Ringing ${toUserId}...`);
 });
 
-// Utility to create a temporary ID
+// Utility to create a configured peer
+function createPeer(isInitiator) {
+  return new SimplePeer({
+    initiator: isInitiator,
+    trickle: false,
+    stream: localStream,
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' }
+        // Optional TURN server can be added here
+      ]
+    }
+  });
+}
+
+// Utility to create a temporary user ID
 function generateRandomId() {
   return 'user-' + Math.random().toString(36).substring(2, 10);
 }
