@@ -1,4 +1,4 @@
-const socket = io('https://socket-backend-lta.onrender.com');
+const socket = io('https://socket-backend-lta.onrender.com'); // Change to your backend
 const urlParams = new URLSearchParams(window.location.search);
 const callId = urlParams.get('callId');
 
@@ -17,29 +17,26 @@ function getStoredUserId() {
 }
 
 const currentUserId = getStoredUserId();
-socket.emit('register', currentUserId);
-console.log('Registered as:', currentUserId);
 
 navigator.mediaDevices.getUserMedia({ video: true, audio: true })
   .then(stream => {
     localStream = stream;
     localVideo.srcObject = stream;
 
+    socket.emit('register', currentUserId);
+    console.log('✅ Registered as:', currentUserId);
+
     if (callId && callId !== currentUserId) {
-      startCall(callId);
+      setTimeout(() => startCall(callId), 1000); // Wait briefly to allow callee to join
     }
   })
-  .catch(err => {
-    console.error('Media access error:', err);
-  });
+  .catch(err => console.error('Media access error:', err));
 
 async function getIceServers() {
   try {
-    const response = await fetch('https://socket-backend-lta.onrender.com/ice-credentials');
-console.log(await response.json())
-    return await response.json();
-  } catch (error) {
-    console.error('Failed to fetch ICE servers, using fallback STUN only.');
+    const res = await fetch('https://socket-backend-lta.onrender.com/ice-credentials');
+    return await res.json();
+  } catch {
     return [
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' }
@@ -48,7 +45,7 @@ console.log(await response.json())
 }
 
 async function startCall(targetUserId) {
-  console.log('Calling user:', targetUserId);
+  console.log('📞 Calling user:', targetUserId);
   const iceServers = await getIceServers();
   peer = new SimplePeer({
     initiator: true,
@@ -60,7 +57,7 @@ async function startCall(targetUserId) {
 }
 
 socket.on('incoming-call', async ({ signalData, fromUserId }) => {
-  console.log('Incoming call from:', fromUserId);
+  console.log('📥 Incoming call from:', fromUserId);
   const iceServers = await getIceServers();
   peer = new SimplePeer({
     initiator: false,
@@ -73,12 +70,8 @@ socket.on('incoming-call', async ({ signalData, fromUserId }) => {
 });
 
 socket.on('call-answered', ({ signalData }) => {
-  console.log('Call answered');
+  console.log('✅ Call answered');
   peer?.signal(signalData);
-});
-
-socket.on('call-ringing', ({ toUserId }) => {
-  console.log(`Ringing ${toUserId}...`);
 });
 
 function setupPeerListeners(targetUserId) {
@@ -92,19 +85,19 @@ function setupPeerListeners(targetUserId) {
   });
 
   peer.on('stream', stream => {
-    console.log('Remote stream received');
+    console.log('📡 Remote stream received');
     remoteVideo.srcObject = stream;
   });
 
   peer.on('connect', () => {
-    console.log('Peer connection established!');
+    console.log('🔗 Peer connection established!');
   });
 
   peer.on('error', err => {
-    console.error('Peer error:', err);
+    console.error('❌ Peer error:', err);
   });
 
   peer.on('close', () => {
-    console.log('Peer connection closed');
+    console.log('❎ Peer connection closed');
   });
 }
