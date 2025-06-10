@@ -1,58 +1,70 @@
+
 const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
-const path = require('path');
+const cors = require('cors');
+const socketIO = require('socket.io');
+const twilio = require('twilio');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
+const io = socketIO(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
+    origin: '*'
   }
 });
 
-// Serve static files (e.g., index.html, script.js) from "public"
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(cors());
 
-const users = {}; // userId => socket.id
+const users = {};
 
-io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+io.on('connection', socket => {
+  console.log('New client connected');
 
-  socket.on('register', (userId) => {
+  socket.on('register', userId => {
     users[userId] = socket.id;
-    socket.userId = userId;
-    console.log(`Registered user ${userId} with socket ${socket.id}`);
+    console.log(`User registered: ${userId}`);
   });
 
-  socket.on('call-user', ({ toUserId, signalData, fromUserId }) => {
-    const targetSocketId = users[toUserId];
-    if (targetSocketId) {
-      io.to(targetSocketId).emit('incoming-call', { signalData, fromUserId });
+  socket.on('call-user', ({ toUserId, fromUserId, signalData }) => {
+    const socketId = users[toUserId];
+    if (socketId) {
+      io.to(socketId).emit('incoming-call', { signalData, fromUserId });
       io.to(socket.id).emit('call-ringing', { toUserId });
-      console.log(`Call from ${fromUserId} to ${toUserId}`);
-    } else {
-      io.to(socket.id).emit('user-not-found', { toUserId });
     }
   });
 
   socket.on('answer-call', ({ toUserId, signalData }) => {
-    const targetSocketId = users[toUserId];
-    if (targetSocketId) {
-      io.to(targetSocketId).emit('call-answered', { signalData });
+    const socketId = users[toUserId];
+    if (socketId) {
+      io.to(socketId).emit('call-answered', { signalData });
     }
   });
 
   socket.on('disconnect', () => {
-    if (socket.userId) {
-      delete users[socket.userId];
-      console.log(`User disconnected: ${socket.userId}`);
+    for (const userId in users) {
+      if (users[userId] === socket.id) {
+        delete users[userId];
+        break;
+      }
     }
+    console.log('Client disconnected');
   });
 });
 
-const PORT = process.env.PORT || 3030;
-server.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+const TWILIO_ACCOUNT_SID = 'YAC6111af4e33752ab07f50db6d1bf0865a';
+const TWILIO_AUTH_TOKEN = '1e3277492db8801ff0571518cc1c6bfb';
+
+
+app.get('/ice-credentials', async (req, res) => {
+  try {
+    const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+    const token = await client.tokens.create();
+    res.json(token.iceServers);
+  } catch (err) {
+    console.error('Twilio ICE error:', err);
+    res.status(500).json({ error: 'Failed to get ICE servers' });
+  }
 });
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`Server listening on port ${PORT}`));

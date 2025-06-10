@@ -1,4 +1,4 @@
-const socket = io('https://socket-backend-lta.onrender.com');
+onst socket = io('https://socket-backend-lta.onrender.com');
 const urlParams = new URLSearchParams(window.location.search);
 const callId = urlParams.get('callId');
 
@@ -7,7 +7,6 @@ let peer;
 const localVideo = document.getElementById('localVideo');
 const remoteVideo = document.getElementById('remoteVideo');
 
-// Generate or retrieve persistent user ID
 function getStoredUserId() {
   let storedId = localStorage.getItem('userId');
   if (!storedId) {
@@ -21,7 +20,6 @@ const currentUserId = getStoredUserId();
 socket.emit('register', currentUserId);
 console.log('Registered as:', currentUserId);
 
-// Request access to media devices
 navigator.mediaDevices.getUserMedia({ video: true, audio: true })
   .then(stream => {
     localStream = stream;
@@ -35,51 +33,40 @@ navigator.mediaDevices.getUserMedia({ video: true, audio: true })
     console.error('Media access error:', err);
   });
 
-function startCall(targetUserId) {
+async function getIceServers() {
+  try {
+    const response = await fetch('https://socket-backend-lta.onrender.com/ice-credentials');
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to fetch ICE servers, using fallback STUN only.');
+    return [
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' }
+    ];
+  }
+}
+
+async function startCall(targetUserId) {
   console.log('Calling user:', targetUserId);
+  const iceServers = await getIceServers();
   peer = new SimplePeer({
     initiator: true,
     trickle: false,
     stream: localStream,
-    config: {
-      iceServers: [
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun4.l.google.com:19302' },
-        {
-          urls: 'turn:openrelay.metered.ca:80',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        }
-      ]
-    }
+    config: { iceServers }
   });
-
   setupPeerListeners(targetUserId);
 }
 
-socket.on('incoming-call', ({ signalData, fromUserId }) => {
+socket.on('incoming-call', async ({ signalData, fromUserId }) => {
   console.log('Incoming call from:', fromUserId);
+  const iceServers = await getIceServers();
   peer = new SimplePeer({
     initiator: false,
     trickle: false,
     stream: localStream,
-    config: {
-      iceServers: [
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun4.l.google.com:19302' },
-        {
-          urls: 'turn:openrelay.metered.ca:80',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        }
-      ]
-    }
+    config: { iceServers }
   });
-
   setupPeerListeners(fromUserId);
   peer.signal(signalData);
 });
